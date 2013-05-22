@@ -72,3 +72,11 @@ case class CaseClassWithTwoConstructors(id: Long,  name: String) {
 case class CaseClassWithSnakeCase(oneThing: String, twoThing: String)
 
 case class CaseClassWithArrays(one: String, two: Array[String], three: Array[Int])
+
+sealed trait CaseObject
+object CaseObject {
+  case object TEST_OBJECT_1 extends CaseObject
+  case object TestObject2 extends CaseObject
+}
+
+case object UnNestedCaseObject

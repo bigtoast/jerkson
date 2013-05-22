@@ -20,20 +20,38 @@ class CaseClassSerializer[A <: Product](klass: Class[_]) extends JsonSerializer[
       f.getName.contains("$")
   }
 
-  private val methods = klass.getDeclaredMethods
-                                .filter { _.getParameterTypes.isEmpty }
-                                .map { m => m.getName -> m }.toMap
-  
-  def serialize(value: A, json: JsonGenerator, provider: SerializerProvider) {
-    json.writeStartObject()
-    for (field <- nonIgnoredFields) {
-      val methodOpt = methods.get(field.getName)
-      val fieldValue: Object = methodOpt.map { _.invoke(value) }.getOrElse(field.get(value))
-      if (fieldValue != None) {
-        val fieldName = methodOpt.map { _.getName }.getOrElse(field.getName)
-        provider.defaultSerializeField(if (isSnakeCase) snakeCase(fieldName) else fieldName, fieldValue, json)
-      }
+  private val isObject = """([A-Za-z0-9_$.]+)\$""".r
+
+  private val caseObjectName = try {
+    klass.getSimpleName match {
+      case isObject( name ) => name.split('$').lastOption
+      case _ => None
     }
-    json.writeEndObject()
+  } catch {
+    case error :InternalError => // doubly nested case objects cause a malformed class name error
+      klass.getName match {
+        case isObject( name ) => name.split('.').lastOption.flatMap { _.split('$').lastOption }
+        case _ => None
+      }
   }
+
+  private val methods = klass.getDeclaredMethods
+    .filter { _.getParameterTypes.isEmpty }
+    .map { m => m.getName -> m }.toMap
+
+  def serialize(value: A, json: JsonGenerator, provider: SerializerProvider) = caseObjectName match {
+    case Some( objectName ) => json.writeString( objectName )
+    case None =>
+      json.writeStartObject()
+      for (field <- nonIgnoredFields) {
+        val methodOpt = methods.get(field.getName)
+        val fieldValue: Object = methodOpt.map { _.invoke(value) }.getOrElse(field.get(value))
+        if (fieldValue != None) {
+          val fieldName = methodOpt.map { _.getName }.getOrElse(field.getName)
+          provider.defaultSerializeField(if (isSnakeCase) snakeCase(fieldName) else fieldName, fieldValue, json)
+        }
+      }
+      json.writeEndObject()
+  }
+
 }

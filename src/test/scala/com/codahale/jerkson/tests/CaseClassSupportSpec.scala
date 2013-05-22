@@ -236,4 +236,54 @@ class CaseClassSupportSpec extends Spec {
       ))
     }
   }
+
+  class `Case object json generation` {
+
+    @Test def `should accept constant formatting` = {
+      generate(CaseObject.TEST_OBJECT_1).must(be("\"TEST_OBJECT_1\""))
+    }
+
+    @Test def `should accept normal camel case formatting` = {
+      generate(CaseObject.TestObject2).must(be("\"TestObject2\""))
+    }
+
+    @Test def `should handle imported nested objects` = {
+      import CaseObject._
+      generate(TEST_OBJECT_1).must(be("\"TEST_OBJECT_1\""))
+    }
+
+    @Test def `should handle unnested object` = {
+      generate(UnNestedCaseObject).must(be("\"UnNestedCaseObject\""))
+    }
+
+    @Test def `should handle case class with nested object and empty set` = {
+      case class Tester( obj :CaseObject, opt:Option[Set[String]] )
+
+      generate(Tester(CaseObject.TEST_OBJECT_1, Some(Set.empty[String]))) must(not(be("")))
+    }
+
+    @Test def `should handle this specific use case` = {
+      case class Node( hostname :String, port :Int )
+      case class Cluster( leader :Node, members: Set[Node], version :Long, epoch :Int ) {
+        def all = members + leader
+      }
+      object Container {
+        sealed trait ClusterState
+        object ClusterState {
+          case object DISCONNECTED extends ClusterState
+          case object JOINING extends ClusterState
+          case object MEMBER  extends ClusterState
+          case object LEAVING extends ClusterState
+          case object ERROR   extends ClusterState
+        }
+      }
+
+      case class ClusterView( state:Container.ClusterState, cluster :Option[Cluster] )
+
+      val view = ClusterView(Container.ClusterState.MEMBER, Some(Cluster(Node("127.0.0.1",666), Set(),0,0)))
+
+      generate(view) must be ("""{"state":"MEMBER","cluster":{"leader":{"hostname":"127.0.0.1","port":666},"members":[],"version":0,"epoch":0}}""")
+
+    }
+  }
 }
